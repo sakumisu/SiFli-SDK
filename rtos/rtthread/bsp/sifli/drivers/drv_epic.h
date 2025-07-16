@@ -196,6 +196,7 @@ typedef struct
     //Offset to specified dst buf, internal use only
     int16_t offset_x;
     int16_t offset_y;
+    rt_list_t list; /**< list link */
 } drv_epic_operation;
 
 typedef struct
@@ -216,6 +217,7 @@ typedef enum
 
 typedef void *drv_epic_render_list_t;
 typedef void (*drv_epic_render_cb)(drv_epic_render_list_t rl, EPIC_LayerConfigTypeDef *p_dst, void *usr_data, uint32_t last);
+typedef void (*drv_epic_render_trav_cb)(drv_epic_operation *op, void *usr_data);
 
 typedef struct
 {
@@ -262,6 +264,7 @@ rt_err_t drv_epic_commit_op(drv_epic_operation *op);
 
 rt_err_t drv_epic_render_msg_commit(EPIC_MsgTypeDef *p_msg);
 
+rt_err_t drv_epic_render_trav(drv_epic_render_list_t list, drv_epic_render_trav_cb cb, void *usr_data);
 #endif /* DRV_EPIC_NEW_API */
 
 EPIC_HandleTypeDef *drv_get_epic_handle(void);

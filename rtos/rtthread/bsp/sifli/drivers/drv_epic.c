@@ -16,6 +16,11 @@
     #include "drv_epic_mask.h"
 #endif
 
+#ifndef __DEBUG__
+    #define __DEBUG__ 1
+
+#endif
+
 #ifdef _MSC_VER
     #define RETURN_ADDR ((rt_uint32_t) _ReturnAddress())
 #else
@@ -64,18 +69,31 @@
 
 #ifdef DRV_EPIC_NEW_API
 
-#define render_list_pool_max 2
-#define letter_pool_max 800
-#define src_list_max 80
-#define mask_buf_max_bytes (16*1024)
-#define mask_buf2_max_bytes 1600
+#ifdef SOLUTION
+    #include "app_mem.h"
+    #define epic_malloc          app_malloc
+    #define epic_realloc         app_realloc
+    #define epic_calloc          app_calloc
+    #define epic_free            app_free
+#else
+    #define epic_malloc          rt_malloc
+    #define epic_realloc         rt_realloc
+    #define epic_calloc          rt_calloc
+    #define epic_free            rt_free
+#endif
 
-#define rl_flag_commit         0x01
-#define rl_flag_rendering     0x02
+#define render_list_pool_max    2
+#define letter_pool_max         1024//800
+#define mask_buf_max_bytes      (16*1024)
+#define mask_buf2_max_bytes     1600
 
-#define debug_rl_hist_num  8 //Set '0' to disable history
+#define rl_flag_commit          0x01
+#define rl_flag_rendering       0x02
 
-#define radius_circle  0x7FFF /**< A very big radius to always draw as circle*/
+#define debug_rl_hist_num       8 //Set '0' to disable history
+
+#define radius_circle           0x7FFF /**< A very big radius to always draw as circle*/
+#define max_flash_num           4
 typedef enum
 {
     HAL_API_BLEND_EX,
@@ -94,7 +112,7 @@ typedef struct
 
     uint16_t src_list_alloc_len; /* Allocated src list len */
     uint16_t src_list_len; /* Committed src len*/
-    drv_epic_operation src_list[src_list_max];
+    rt_list_t src_list;    /* Committed source list*/
     drv_epic_letter_type_t letter_pool[letter_pool_max];
     uint32_t letter_pool_free;
     EPIC_AreaTypeDef  commit_area; /*Committed invalid area*/
@@ -186,6 +204,8 @@ typedef struct
     uint8_t *mask_buf2_pool; //Pool2 for draw mask
 
     EPIC_HandleTypeDef *using_epic;
+
+    uint32_t flash_addr[max_flash_num]; //Current rl accessed flash
 
     /*statistics*/
     //Global statistics
@@ -291,7 +311,7 @@ L1_NON_RET_BSS_SECT_BEGIN(drv_epic_stack)
     L1_NON_RET_BSS_SECT(drv_epic_stack, ALIGN(RT_ALIGN_SIZE) static uint8_t drv_epic_mask_buf_pool[mask_buf_max_bytes]);
     L1_NON_RET_BSS_SECT(drv_epic_stack, ALIGN(RT_ALIGN_SIZE) static uint8_t drv_epic_mask_buf2_pool[mask_buf2_max_bytes]);
 #endif /* DRV_EPIC_NEW_API */
-L1_NON_RET_BSS_SECT(drv_epic_stack, ALIGN(RT_ALIGN_SIZE) static uint8_t drv_epic_stack[3072]);
+L1_NON_RET_BSS_SECT(drv_epic_stack, ALIGN(RT_ALIGN_SIZE) static uint8_t drv_epic_stack[4096]);
 L1_NON_RET_BSS_SECT_END
 
 
@@ -2006,9 +2026,9 @@ void drv_epic_cont_blend_reset(void)
     if(!(expr)){print_gpu_error_info();\
     RT_ASSERT(expr);}\
 }while(0)
-static rt_err_t render_start(void);
+static rt_err_t render_start(drv_epic_render_list_t list);
 static rt_err_t render(drv_epic_render_list_t list);
-static rt_err_t render_end(void);
+static rt_err_t render_end(drv_epic_render_list_t list);
 static rt_err_t destroy_render_list(drv_epic_render_list_t list);
 static void statisttics_start(void);
 static void statisttics_end(void);
@@ -2154,11 +2174,14 @@ static void print_rl(priv_render_list_t *rl)
 {
     LOG_E("\n\n\nPrint Render list");
     LOG_E(FORMATED_LAYER_INFO(&rl->dst, "DST"));
-    for (uint16_t i = 0; i < rl->src_list_len; i++)
+
+    uint16_t i = 0;
+    rt_list_t *pos;
+    rt_list_for_each(pos, &rl->src_list)
     {
-        drv_epic_operation *p_operation = &rl->src_list[i];
+        drv_epic_operation *p_operation = rt_list_entry(pos, drv_epic_operation, list);
         char idex_str[4];
-        rt_sprintf(&idex_str[0], "%d", i);
+        rt_sprintf(&idex_str[0], "%d", i++);
         print_operation(&idex_str[0], p_operation);
     }
     LOG_E("\n\nPrint Render list DONE.\n");
@@ -2193,66 +2216,87 @@ extern void BSP_TEST_GPIO_SET(uint32_t pin, uint32_t v);
 
 #endif
 
-static void render_lock(drv_epic_op_type_t ops,
-                        uint32_t fg,
-                        uint32_t bg,
-                        uint32_t mask)
+static inline void add_flash_addr(uint32_t addr)
 {
-    RT_ASSERT((0 == drv_epic.gpu_fg_addr) && (0 == drv_epic.gpu_bg_addr) && (0 == drv_epic.gpu_mask_addr));
-
-    drv_epic.gpu_last_op = ops;
-    drv_epic.gpu_fg_addr = fg;
-    drv_epic.gpu_bg_addr = bg;
-    drv_epic.gpu_mask_addr = mask;
-
-    /* Lock GPU used flash*/
-    if (fg != 0 || bg != 0 || mask != 0)
+    if (addr == 0) return;
+    void *handle = rt_flash_get_handle_by_addr(addr);
+    if (handle == NULL)
     {
-        rt_flash_lock(drv_epic.gpu_fg_addr);
-
-        if (rt_flash_get_handle_by_addr(drv_epic.gpu_fg_addr) != rt_flash_get_handle_by_addr(drv_epic.gpu_bg_addr))
-            rt_flash_lock(drv_epic.gpu_bg_addr);
-
-        if ((rt_flash_get_handle_by_addr(drv_epic.gpu_fg_addr) != rt_flash_get_handle_by_addr(drv_epic.gpu_mask_addr))
-                && (rt_flash_get_handle_by_addr(drv_epic.gpu_bg_addr) != rt_flash_get_handle_by_addr(drv_epic.gpu_mask_addr)))
-            rt_flash_lock(drv_epic.gpu_mask_addr);
+        return; //Not a flash address
     }
 
-    __DEBUG_RENDER_LOCK__(ops);
+    for (uint32_t i = 0; i < max_flash_num; i++)
+    {
+        if (drv_epic.flash_addr[i] == 0)
+        {
+            //Find empty slot
+            drv_epic.flash_addr[i] = addr;
+            return;
+        }
+        else if (rt_flash_get_handle_by_addr(drv_epic.flash_addr[i]) == handle)
+        {
+            //Already locked
+            return;
+        }
+        else
+        {
+            //Do nothing, continue
+        }
+    }
 
+    RT_ASSERT(0); //Can't find empty slot
 }
-static void render_unlock(void)
-{
 
+static void render_lock_flash(drv_epic_render_list_t list)
+{
+    priv_render_list_t *rl = (priv_render_list_t *)list;
+
+    rt_list_t *pos;
+    rt_list_for_each(pos, (&rl->src_list))
+    {
+        drv_epic_operation *o = rt_list_entry(pos, drv_epic_operation, list);
+
+        add_flash_addr((uint32_t)o->mask.data);
+
+        if (o->op == DRV_EPIC_DRAW_IMAGE)
+            add_flash_addr((uint32_t)o->desc.blend.layer.data);
+
+        if (o->op == DRV_EPIC_DRAW_LETTERS)
+        {
+            //Assume that all letters are in the same flash
+            if (o->desc.label.p_letters[0].data)
+                add_flash_addr((uint32_t)o->desc.label.p_letters[0].data);
+        }
+    }
+
+    for (uint32_t i = 0; i < max_flash_num; i++)
+    {
+        if (drv_epic.flash_addr[i])
+            rt_flash_lock(drv_epic.flash_addr[i]);
+    }
+
+    __DEBUG_RENDER_LOCK__(0);
+}
+
+
+static void render_unlock_flash(drv_epic_render_list_t list)
+{
     __DEBUG_RENDER_UNLOCK__;
 
-
-    /* UnLock GPU used flash*/
-    if (drv_epic.gpu_fg_addr != 0 || drv_epic.gpu_bg_addr != 0 || drv_epic.gpu_mask_addr != 0)
+    for (uint32_t i = 0; i < max_flash_num; i++)
     {
-        rt_flash_unlock(drv_epic.gpu_fg_addr);
-
-        if (rt_flash_get_handle_by_addr(drv_epic.gpu_fg_addr) != rt_flash_get_handle_by_addr(drv_epic.gpu_bg_addr))
-            rt_flash_unlock(drv_epic.gpu_bg_addr);
-
-        if ((rt_flash_get_handle_by_addr(drv_epic.gpu_fg_addr) != rt_flash_get_handle_by_addr(drv_epic.gpu_mask_addr))
-                && (rt_flash_get_handle_by_addr(drv_epic.gpu_bg_addr) != rt_flash_get_handle_by_addr(drv_epic.gpu_mask_addr)))
-            rt_flash_unlock(drv_epic.gpu_mask_addr);
+        if (drv_epic.flash_addr[i])
+        {
+            rt_flash_unlock(drv_epic.flash_addr[i]);
+            drv_epic.flash_addr[i] = 0;
+        }
     }
-
-
-    drv_epic.gpu_fg_addr  = 0;
-    drv_epic.gpu_bg_addr  = 0;
-    drv_epic.gpu_mask_addr = 0;
-
-    drv_epic.gpu_output_addr = 0;
-    drv_epic.gpu_output_size = 0;
 }
 
-static rt_err_t render_start(void)
+static rt_err_t render_start(drv_epic_render_list_t list)
 {
     statisttics_start();
-
+    render_lock_flash(list);
 #ifdef BSP_USING_PM
     rt_pm_request(PM_SLEEP_MODE_IDLE);
 #endif /*BSP_USING_PM*/
@@ -2265,7 +2309,7 @@ static rt_err_t render_start(void)
 }
 
 
-static rt_err_t render_end(void)
+static rt_err_t render_end(drv_epic_render_list_t list)
 {
     SCB_InvalidateDCache();
 
@@ -2273,7 +2317,7 @@ static rt_err_t render_end(void)
 #ifdef BSP_USING_PM
     rt_pm_release(PM_SLEEP_MODE_IDLE);
 #endif /*BSP_USING_PM*/
-
+    render_unlock_flash(list);
     statisttics_end();
     return RT_EOK;
 }
@@ -3322,9 +3366,6 @@ static rt_err_t render_arc(drv_epic_operation *p_operation, EPIC_LayerConfigType
     }
 
 
-    if (p_operation->mask.data) render_lock(p_operation->op, 0, 0, (uint32_t)(p_operation->mask.data));
-
-
     draw_masked_rect(dst, &p_operation->mask,
                      mask_list, &clipped_area, p_operation->desc.arc.argb8888,
                      &round_area_1, &round_area_2,
@@ -3332,8 +3373,6 @@ static rt_err_t render_arc(drv_epic_operation *p_operation, EPIC_LayerConfigType
                      width
                     );
 
-
-    if (p_operation->mask.data) render_unlock();
 
     for (int32_t i = 0; i < mask_counts; i++) drv_epic_mask_free_param(mask_list[i]);
 
@@ -3920,16 +3959,11 @@ static rt_err_t render_line_skew(drv_epic_operation *p_operation, EPIC_LayerConf
     }
 
 
-    if (p_operation->mask.data) render_lock(p_operation->op, 0, 0, (uint32_t)(p_operation->mask.data));
-
 
     //draw_masked_rect
     draw_masked_rect(dst, &p_operation->mask,
                      masks, &blend_area, p_operation->desc.line.argb8888,
                      NULL, NULL, NULL, 0);
-
-
-    if (p_operation->mask.data) render_unlock();
 
 
     drv_epic_mask_free_param(&mask_left_param);
@@ -4301,13 +4335,9 @@ static rt_err_t render_polygon(drv_epic_operation *p_operation, EPIC_LayerConfig
     while (mask_cnt < point_cnt);
     mask_list[make_index] = NULL;
 
-    if (p_operation->mask.data) render_lock(p_operation->op, 0, 0, (uint32_t)(p_operation->mask.data));
-
     draw_masked_rect(dst, &p_operation->mask,
                      mask_list, &clip_area, p_operation->desc.polygon.argb8888,
                      NULL, NULL, NULL, 0);
-
-    if (p_operation->mask.data) render_unlock();
 
     for (int16_t i = 0; i < make_index; i++) drv_epic_mask_free_param(mask_list[i]);
 
@@ -4332,10 +4362,12 @@ static rt_err_t render(drv_epic_render_list_t list)
     if (rl->letter_pool_free > drv_epic.letter_pool_used_max)
         drv_epic.letter_pool_used_max = rl->letter_pool_free;
 
-    for (uint16_t i = 0; i < rl->src_list_len; i++)
+    uint16_t i = 0;
+    rt_list_t *pos;
+    rt_list_for_each(pos, (&rl->src_list))
     {
-        drv_epic_operation *p_operation = &rl->src_list[i];
-
+        drv_epic_operation *p_operation = rt_list_entry(pos, drv_epic_operation, list);
+        i++;
         if (_layer_IntersectArea(dst, &p_operation->clip_area, &intersect_area))
         {
             if (0 == (drv_epic.dbg_flag_dis_operations & (1 << p_operation->op)))
@@ -4364,7 +4396,6 @@ static rt_err_t render(drv_epic_render_list_t list)
                 p_cur_hist->start_tick = start_tick;
                 p_cur_hist->cost_us = 0;
 #endif /* debug_rl_hist_num > 0 */
-
 
                 switch (p_operation->op)
                 {
@@ -4622,6 +4653,14 @@ rt_err_t destroy_render_list(drv_epic_render_list_t list)
 {
     priv_render_list_t *rl = (priv_render_list_t *) list;
 
+    rt_list_t *pos, *next;
+    rt_list_for_each_safe(pos, next, (&rl->src_list))
+    {
+        drv_epic_operation *o = rt_list_entry(pos, drv_epic_operation, list);
+        rt_list_remove(&o->list);
+        epic_free(o);
+    }
+
     rt_enter_critical();
     rl->flag = 0;
     rl->src_list_len = 0;
@@ -4688,7 +4727,7 @@ static void epic_task(void *param)
                 p_dst->x_offset = p_invalid_area->x0;
                 p_dst->data = (uint8_t *)p_drv_epic->cur_buf;
 
-                render_start();
+                render_start(rl);
 
                 for (int16_t start_row = p_invalid_area->y0; start_row <= p_invalid_area->y1; start_row += max_row)
                 {
@@ -4741,8 +4780,8 @@ static void epic_task(void *param)
                     }
                 }
 
+                render_end(rl);
                 destroy_render_list(rl);
-                render_end();
             }
         }
         break;
@@ -4770,7 +4809,7 @@ static void epic_task(void *param)
                 scale_y = EPIC_INPUT_SCALE_NONE * p_dst->height / HAL_EPIC_AreaHeight(&p_Render2Buf->dst_area);
 
 
-                render_start();
+                render_start(rl);
 
                 /*
                     If the scaling is required, we need render the image to the 'p_drv_epic->buf1&2' buffer first,
@@ -4909,8 +4948,8 @@ static void epic_task(void *param)
                     }
                 }
 
+                render_end(rl);
                 destroy_render_list(rl);
-                render_end();
             }
         }
         break;
@@ -5224,37 +5263,32 @@ drv_epic_operation *drv_epic_alloc_op(drv_epic_render_buf *p_buf)
         return NULL;
     }
 
-
-
-    if (rl->src_list_alloc_len < src_list_max)
+    RT_ASSERT(rl->src_list_len == rl->src_list_alloc_len);
+    drv_epic_operation *ret_op = epic_calloc(1, sizeof(drv_epic_operation));
+    if (!ret_op)
     {
-        drv_epic_operation *ret_op;
-        RT_ASSERT(rl->src_list_len == rl->src_list_alloc_len);
-        ret_op = &rl->src_list[rl->src_list_alloc_len];
+        LOG_E("sys memory is full!");
+        print_rl(rl);
+        RT_ASSERT(0);
+    }
 
-        memset(ret_op, 0, sizeof(drv_epic_operation));
+    rt_list_insert_before(&rl->src_list, &ret_op->list);
 
-        if ((rl == found_list) && ((4 == merge_ret) || (5 == merge_ret)))
-        {
-            ret_op->offset_x = x_off;
-            ret_op->offset_y = y_off;
-        }
-        else
-        {
-            ret_op->offset_x = 0;
-            ret_op->offset_y = 0;
-        }
-
-
-        rl->src_list_alloc_len++;
-        return ret_op;
+    if ((rl == found_list) && ((4 == merge_ret) || (5 == merge_ret)))
+    {
+        ret_op->offset_x = x_off;
+        ret_op->offset_y = y_off;
     }
     else
     {
-        LOG_E("Render list is full!");
-        print_rl(rl);
-        return NULL;
+        ret_op->offset_x = 0;
+        ret_op->offset_y = 0;
     }
+
+    rl->src_list_alloc_len++;
+    RT_ASSERT(rt_list_len(&rl->src_list) == rl->src_list_alloc_len);
+
+    return ret_op;
 }
 
 
@@ -5276,7 +5310,7 @@ rt_err_t drv_epic_commit_op(drv_epic_operation *op)
     {
         if (rl->src_list_len > 0)
         {
-            drv_epic_operation *prev_op = &rl->src_list[rl->src_list_len - 1];
+            drv_epic_operation *prev_op = rt_list_tail_entry(&rl->src_list, drv_epic_operation, list);
             drv_epic_operation *curr_op = op;
 
             if ((DRV_EPIC_DRAW_FILL == prev_op->op) && (prev_op->desc.fill.opa >= OPA_MAX) && (NULL == prev_op->mask.data)
@@ -5387,7 +5421,6 @@ rt_err_t drv_epic_commit_op(drv_epic_operation *op)
 
 __COMMIT_OPERATION:
     /*Commit operation*/
-    RT_ASSERT(rl->src_list_len < src_list_max);
     rl->src_list_len++;
     return RT_EOK;
 }
@@ -5477,6 +5510,7 @@ static rt_err_t drv_epic_render_list_init(void)
             drv_epic.render_list_pool[i].commit_area.x1 = -1;
             drv_epic.render_list_pool[i].commit_area.y0 = 0;
             drv_epic.render_list_pool[i].commit_area.y1 = -1;
+            rt_list_init(&drv_epic.render_list_pool[i].src_list);
         }
     }
 
@@ -5484,6 +5518,31 @@ static rt_err_t drv_epic_render_list_init(void)
 
     return RT_EOK;
 }
+
+rt_thread_t drv_epic_task_get(void)
+{
+    return drv_epic.task.name[0] ? &drv_epic.task : NULL;
+}
+
+rt_err_t drv_epic_render_trav(drv_epic_render_list_t list, drv_epic_render_trav_cb cb, void *usr_data)
+{
+    if (!list || !cb)
+    {
+        LOG_E("%s: parameter[list] %p [cb] %p is null.", __func__, list, cb);
+        return RT_ERROR;
+    }
+    priv_render_list_t *rl = (priv_render_list_t *)list;
+
+    rt_list_t *pos;
+    rt_list_for_each(pos, (&rl->src_list))
+    {
+        drv_epic_operation *o = rt_list_entry(pos, drv_epic_operation, list);
+        cb(o, usr_data);
+    }
+
+    return RT_EOK;
+}
+
 #endif /*DRV_EPIC_NEW_API*/
 
 bool drv_epic_is_busy(void)
@@ -5529,8 +5588,13 @@ int drv_epic_init(void)
         drv_epic.mq = rt_mq_create("drv_epic", sizeof(EPIC_MsgTypeDef), 4, RT_IPC_FLAG_FIFO);
         RT_ASSERT(drv_epic.mq);
 
+        uint16_t priority = RT_THREAD_PRIORITY_HIGH + RT_THREAD_PRIORITY_LOWWER;
+#ifdef SOLUTION
+        priority = RT_THREAD_PRIORITY_HIGH - 3;
+#endif
+
         rt_err_t ret = rt_thread_init(&drv_epic.task, "epic_task", epic_task, &drv_epic, drv_epic_stack, sizeof(drv_epic_stack),
-                                      RT_THREAD_PRIORITY_HIGH + RT_THREAD_PRIORITY_LOWWER, RT_THREAD_TICK_DEFAULT);
+                                      priority, RT_THREAD_TICK_DEFAULT);
 
         RT_ASSERT(RT_EOK == ret);
         rt_thread_startup(&drv_epic.task);
