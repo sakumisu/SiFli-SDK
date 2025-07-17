@@ -2267,14 +2267,6 @@ __HAL_ROM_USED uint32_t HAL_QSPI_GET_SRC_CLK(FLASH_HandleTypeDef *fhandle)
     {
         clk_module = RCC_CLK_MOD_FLASH4;
     }
-    else if (FLASH3 + HPSYS_MPI_MEM_CBUS_2_SBUS_OFFSET == fhandle->Instance)
-    {
-        clk_module = RCC_CLK_MOD_FLASH3;
-    }
-    else if (FLASH4 + HPSYS_MPI_MEM_CBUS_2_SBUS_OFFSET == fhandle->Instance)
-    {
-        clk_module = RCC_CLK_MOD_FLASH4;
-    }
 #endif
 #ifdef FLASH5
     else if (FLASH5 == fhandle->Instance)
