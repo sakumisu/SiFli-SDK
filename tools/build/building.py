@@ -183,6 +183,10 @@ def ImgFileBuilder(target, source, env):
         shutil.move(os.path.join(source_path, target_filename), '{}'.format(target[0]))
     else:
         subprocess.run(EZIP_PATH + ' -convert ' + str(source[0]) + ' ' + env['FLAGS'] + ' -outdir {}'.format(tgt_directory), shell=True, check=True)
+        # 从.c转为.c的情况下会让scons陷入到依赖循环导致出错。
+        # 因此将转换后的文件后缀修改为`.tmp.c`。
+        # 现在将转换后的真实的.c文件转为.tmp.c后缀以让scons后续编译能正常进行
+        shutil.move('{}'.format(target[0]).replace(".tmp.c", ".c"), '{}'.format(target[0])) 
 
 def FontFileBuild(target, source, env):
     SIFLI_SDK = os.getenv('SIFLI_SDK')
@@ -1169,7 +1173,7 @@ def PrepareBuilding(env, has_libcpu=False, remove_components=[], buildlib=None):
     
     # add image builder
     img_file_action = SCons.Action.Action(ImgFileBuilder, 'GenImgFile $TARGET')
-    bld = Builder(action = img_file_action, suffix = '.c', src_suffix = '.png')
+    bld = Builder(action = img_file_action, suffix = '.tmp.c', src_suffix = '.c')
     Env.Append(BUILDERS = {"ImgFile": bld})
     Env.AddMethod(ImgResource, "ImgResource")
 
