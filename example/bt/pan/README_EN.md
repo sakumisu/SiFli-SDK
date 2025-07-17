@@ -13,6 +13,34 @@ Source code path: example/bt/pan
 <!-- Example introduction -->
 This example demonstrates connecting to a phone's PAN protocol via Bluetooth, then using Finsh commands to retrieve current weather information from a specific website.
 
+## Adding CA Certificates
+1. Storing Root Certificates of Signing Authorities
+
+- `external/mbedtls_288/certs/default` The directory stores the commonly used CA certificate files.
+
+- `certs` The directory stores the CA certificate files added by the users.
+
+If the required CA root certificate is not present in the `certs/default` directory,<br>
+users must copy their PEM-format CA certificate to the root `certs` directory. (Only PEM format is supported; DER format is not accepted).<br>
+Added certificates should be placed alongside `DigiCert_Global_Root_CA2.crt` in this directory.
+![alt text](./assets/list.png)
+
+2. Certificate Format Specifications
+
+- `PEM` format Certificates
+
+**PEM format certificate** use **.pem** or **.cer** file with suffixes at the end.
+
+When opened in a text editor, content starts with `-----BEGIN CERTIFICATE-----` and ends with `-----END CERTIFICATE-----`.
+
+- `DERformat Certificates`
+
+    **The DER format certificate** is a binary file type.
+
+3. Checking Configuration
+Verify in `proj.conf`: If `PKG_USING_MBEDTLS_USER_CERTS` is enabled, all files in the root certs directory will be merged into `ports/src/tls_certificate.c` during compilation.
+![alt text](./assets/proj.png)
+
 ## Example Usage
 <!-- Instructions on how to use the example, such as connecting hardware pins to observe waveforms, compilation and flashing can reference related documentation.
 For rt_device examples, you also need to list the configuration switches used in this example, such as PWM example uses PWM1, which needs to be enabled in the onchip menu -->
@@ -73,5 +101,5 @@ The example can retrieve weather information from a specific website by connecti
 |:---|:---|:---|
 |0.0.1 |01/2025 |Initial version |
 |0.0.2 |04/2025 |Added OTA |
-| | | |
+|0.0.3 |07/2025 |Add CA certificate |
 | | | |

@@ -15,7 +15,7 @@
 
 ##  添加 CA 证书
 1. 存放签名机构根证书
-- `external/mbedtls/certs/default` 目录中存储着常用的 CA 证书文件
+- `external/mbedtls_288/certs/default` 目录中存储着常用的 CA 证书文件
 - `certs` 目录下存储着用户增加的 CA 证书文件
 
 如果 `certs/default` 目录下没有包含用户需要的 CA 根证书文件<br>
