@@ -225,7 +225,6 @@
                      unsigned long   count )
   {
 #if defined (RT_USING_DFS)
-#if defined (DISABLE_LVGL_V9)
 	FT_FILE*  file;
 
 
@@ -239,9 +238,6 @@
 
 	return (unsigned long)ft_fread( buffer, 1, count, file );
 #else
-    return 0;
-#endif 
-#else
 	return 0;
 #endif
   }
@@ -254,8 +250,6 @@
                   const char*  filepathname )
   {
 #if defined (RT_USING_DFS)
-#if defined (DISABLE_LVGL_V9)
-
 	  FT_FILE*  file;
 
 
@@ -270,7 +264,6 @@
     stream->close              = NULL;
 
     file = ft_fopen( filepathname, "rb" );
-    
     if ( !file )
     {
       FT_ERROR(( "FT_Stream_Open:"
@@ -298,9 +291,6 @@
     FT_TRACE1(( " opened `%s' (%ld bytes) successfully\n",
                 filepathname, stream->size ));
     return FT_Err_Ok;
-#else
-    return 0;
-#endif
 #else
 	return FT_Err_Cannot_Open_Resource;
 #endif
