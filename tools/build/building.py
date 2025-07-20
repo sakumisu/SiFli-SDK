@@ -424,6 +424,9 @@ def FsBuild(target, source, env):
         
     found=0
     for mem in mems:
+        if 'version' in mem:
+            # skip header
+            continue
         mem_base = int(mem['base'], 0)
         for region in mem['regions']:
             offset = int(region['offset'], 0)
