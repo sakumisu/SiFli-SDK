@@ -1,6 +1,5 @@
-# SD卡文件系统性能测试示例
-
-本示例展示了如何在 SF32LB52x 平台上通过 SPI 接口对 SD 卡进行文件系统性能测试。该示例实现了实时速度监控、缓冲区优化和详细的性能分析功能。
+# SPI TF卡文件系统示例
+本示例展示了如何在 SF32LB52x 平台上通过 SPI 接口对 TF 卡进行文件系统性能测试。该示例实现了实时速度监控、缓冲区优化和详细的性能分析功能。
 
 本示例使用了 SiFli-SDK 的以下功能：
 - **RT-Thread 文件系统**：使用 DFS（设备文件系统）框架进行文件操作 - [API参考](https://www.rt-thread.org/document/site/programming-manual/filesystem/filesystem/)
