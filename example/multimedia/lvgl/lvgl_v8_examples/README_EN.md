@@ -1,7 +1,7 @@
-# LVGL v9 Official Example
+# LVGL v8 Official Example
 
 ## Introduction
-This example is used to test LVGL V9 APIs using officially provided examples.
+This example is used to test LVGL V8 APIs using officially provided examples.
 You can replace the lv_example_scroll_1() function in src/main.c (simulator in simulator/applications/application.c) to test other APIs.
 Other API functions can be referenced in the src/examples/lv_examples.h header file.
 
@@ -18,8 +18,8 @@ Simulator project is in the simulator directory:
 If using VS2022 or other versions besides VS2017, you will be prompted to upgrade the MSVC SDK when loading the project. After upgrading, it can be used normally.
 ```
 
-## How to Use Tjpgd
-Source Code Path: SiFli-SDK\example\multimedia\lvgl\lvgl_v9_examples
+## Supplementary Instructions - How to Use sjpg
+Source Code Path: SiFli-SDK\example\multimedia\lvgl\lvgl_v8_examples
 
 ### Supported Platforms
 This example can run on the following development boards:
@@ -28,7 +28,7 @@ This example can run on the following development boards:
 
 
 ### Overview
-* After inserting an SD card to complete file system mounting, read and display .jpg format images from it
+* After inserting an SD card to complete file system mounting, read and display .sjpg and .jpg format images from it
 
 ### Hardware Requirements
 * Huangshan development board or 52x series development board
@@ -38,7 +38,7 @@ This example can run on the following development boards:
 ### Example Usage
 
 #### Compilation and Flashing
-The default display image in the demo code is: ``` flower.jpg ```
+The default display image in the demo code is: ``` small_image.sjpg ```
 
 Switch to the example project directory and run the scons command to compile:
 
@@ -78,19 +78,19 @@ menuconfig --board=sf32lb52-lchspi-ulp
 ```
 * Enable SPI bus
 
-![alt text](assets/V9_SPI.png)
+![alt text](assets/V8_SPI.png)
 
 * Mount SD\TF device on SPI bus
 
-![alt text](assets/V9_tf.png)
+![alt text](assets/V8_tf.png)
 
 * Configure file path
 
-![alt text](assets/V9_elm.png)
+![alt text](assets/V8_elm.png)
 
 * Enable LVGL file system interface, configure drive letter, and enable decoder
 
-![alt text](assets/V9_posix.png)
+![alt text](assets/V8_posix.png)
 
 ### Troubleshooting
 * Abnormal log
