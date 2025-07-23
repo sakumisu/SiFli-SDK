@@ -1719,8 +1719,9 @@ def BuildJLinkLoadScript(main_env):
     f.write(s)
     f.close()
 
-    device = main_env['JLINK_DEVICE']
-    device = device.split('_')[0][:-1]
+    decice_memory = main_env['JLINK_DEVICE'].split('_')
+    device = decice_memory[0][:-1]
+    memory = decice_memory[1] if len(decice_memory) > 1 else 'NOR'
 
     download_list = ' '.join(
         f"\"{file['name']}\"" if file['name'].lower().endswith(('.elf', '.hex')) 
@@ -1730,6 +1731,7 @@ def BuildJLinkLoadScript(main_env):
 
     generate_uart_download_bat(main_env, device, download_list, ImgDownUart_PATH)
     generate_uart_download_sh(main_env, device, download_list, ImgDownUart_PATH)
+    generate_sftool_param(main_env, device, memory, download_file)
 
 
 def generate_uart_download_bat(main_env, device, download_list, ImgDownUart_PATH):
@@ -1791,3 +1793,38 @@ echo "$input"
     uart_f.close()
     
     os.chmod(uart_sh_path, 0o755)
+
+def generate_sftool_param(main_env, device, memory, download_list):
+    import json
+    
+    # Convert download_list to sftool format
+    files = []
+    for item in download_list:      
+        addr_str = f"0x{item['addr']:08X}"
+        
+        if item['name'].lower().endswith(('.elf', '.hex')):
+            files.append({"file": item['name']})
+        else:
+            files.append({"file": item['name'], "addr": addr_str})
+
+    # Create sftool configuration
+    config = {
+        "chip": device,
+        "memory": memory,
+    }
+    
+    config["write_flash"] = {
+        "verify": True,
+        "files": files
+    }
+    
+    # Write JSON file
+    json_path = os.path.join(main_env['build_dir'], 'sftool_param.json')
+    try:
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        print(f"Generated sftool param: {json_path}")
+    except Exception as e:
+        print(f"Error writing sftool param: {e}")
+
+    return json_path
