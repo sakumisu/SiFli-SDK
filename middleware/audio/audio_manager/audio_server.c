@@ -3713,16 +3713,6 @@ AUDIO_API int audio_write(audio_client_t handle, uint8_t *data, uint32_t data_le
         return -1;
     }
 
-    if (handle->device_using == AUDIO_DEVICE_A2DP_SINK && g_tws_volume_relative)
-    {
-        int16_t *p = (int16_t *)data;
-        uint32_t samples = data_len >> 1;
-        for (uint32_t i = 0; i < samples; i++)
-        {
-            p[i] = p[i] >> (15 - g_tws_volume);
-        }
-    }
-
 #if SOFTWARE_TX_MIX_ENABLE
 #if !TWS_MIX_ENABLE
     if (handle->device_using == AUDIO_DEVICE_A2DP_SINK)
@@ -3765,6 +3755,16 @@ put_raw:
 #if BT_BAP_BROADCAST_SINK
     ble_sink_adjust_pll(&handle->ring_buf);
 #endif
+
+    if (handle->device_using == AUDIO_DEVICE_A2DP_SINK && g_tws_volume_relative)
+    {
+        int16_t *p = (int16_t *)data;
+        uint32_t samples = data_len >> 1;
+        for (uint32_t i = 0; i < samples; i++)
+        {
+            p[i] = p[i] >> (15 - g_tws_volume);
+        }
+    }
 
     len = rt_ringbuffer_put(&handle->ring_buf, data, data_len);
 #if defined(BT_BAP_BROADCAST_SINK) || defined(BT_BAP_BROADCAST_SOURCE)
