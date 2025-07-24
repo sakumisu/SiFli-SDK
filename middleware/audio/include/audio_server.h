@@ -313,6 +313,8 @@ void micbias_power_on();
 
 #define BAP_BROADCAST_SINK_CACHE_SIZE        (960 * 4)  // 10ms * 4
 void audio_server_seup_ble_bap_src(struct rt_ringbuffer *rb, void (*ble_src_callback)());
+void audio_set_tws_volume(uint8_t volume);
+void audio_set_tws_volume_type(uint8_t is_relative);
 
 #ifdef __cplusplus
 }

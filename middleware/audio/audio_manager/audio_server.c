@@ -108,6 +108,8 @@ static void audio_data_stop(void);
 
 static audio_device_e current_audio_device;
 static uint8_t current_play_status;
+static uint8_t g_tws_volume = 15;
+static uint8_t g_tws_volume_relative;
 #define g_hardware_mix_enable    0 //mix is left + right, make big volume
 
 enum
@@ -3671,6 +3673,19 @@ static inline void ble_sink_adjust_pll(struct rt_ringbuffer *rb)
 }
 #endif
 
+AUDIO_API void audio_set_tws_volume(uint8_t volume)
+{
+    if (volume > 15)
+        volume = 15;
+    g_tws_volume = volume;
+}
+
+AUDIO_API void audio_set_tws_volume_type(uint8_t is_relative)
+{
+    g_tws_volume_relative = is_relative;
+}
+
+
 /**
   * @brief  write pcm data to downlink cache buffer
   * @param  handle value return by audio_open
@@ -3696,6 +3711,16 @@ AUDIO_API int audio_write(audio_client_t handle, uint8_t *data, uint32_t data_le
     {
         LOG_D("audio_write is suspend %d", handle->audio_type);
         return -1;
+    }
+
+    if (handle->device_using == AUDIO_DEVICE_A2DP_SINK && g_tws_volume_relative)
+    {
+        int16_t *p = (int16_t *)data;
+        uint32_t samples = data_len >> 1;
+        for (uint32_t i = 0; i < samples; i++)
+        {
+            p[i] = p[i] >> (15 - g_tws_volume);
+        }
     }
 
 #if SOFTWARE_TX_MIX_ENABLE
