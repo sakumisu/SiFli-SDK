@@ -2650,7 +2650,11 @@ inline static void audio_client_start(audio_client_t client)
     rt_pm_request(PM_SLEEP_MODE_IDLE);
     rt_pm_hw_device_start();
 #ifdef SF32LB52X
-    pm_scenario_start(PM_SCENARIO_AUDIO);
+    if (!client->cpu_freq_scale)
+    {
+        LOG_I("start pm scenario audio");
+        pm_scenario_start(PM_SCENARIO_AUDIO);
+    }
     if (client->audio_type == AUDIO_TYPE_BT_VOICE)
     {
         HAL_HPAON_WakeCore(CORE_ID_LCPU);
@@ -2759,6 +2763,7 @@ Exit:
 
     if (audio_pm_debug == 0)
     {
+        LOG_I("stop pm scenario audio");
         pm_scenario_stop(PM_SCENARIO_AUDIO);
         current_play_status = 0;
     }
@@ -3802,11 +3807,11 @@ AUDIO_API int audio_ioctl(audio_client_t handle, int cmd, void *parameter)
         return -1;
     }
     LOG_D("audio_ioctl: cmd=%d", cmd);
-    if (cmd == 0)
+    if (cmd == AUDIO_IOCTL_FACTORY_LOOPBACK_GAIN)
     {
         handle->is_factory_loopback = gain | 0x80;
     }
-    else if (cmd == 1)
+    else if (cmd == AUDIO_IOCTL_FLUSH_TIME_MS)
     {
         uint32_t *time_ms = (uint32_t *)parameter;
         ret = -1;
@@ -3815,12 +3820,12 @@ AUDIO_API int audio_ioctl(audio_client_t handle, int cmd, void *parameter)
             uint32_t bytes_per_second = handle->parameter.write_samplerate * handle->parameter.write_channnel_num * 2;
             if (bytes_per_second)
             {
-                *time_ms = rt_ringbuffer_data_len(&handle->ring_buf)  * 1000 / bytes_per_second;
+                *time_ms = rt_ringbuffer_data_len(&handle->ring_buf) * 1000 / bytes_per_second;
                 ret = 0;
             }
         }
     }
-    else if (cmd == 2)
+    else if (cmd == AUDIO_IOCTL_IS_FADE_OUT_DONE)
     {
 #if !SOFTWARE_TX_MIX_ENABLE
         ret = -1;
@@ -3830,7 +3835,7 @@ AUDIO_API int audio_ioctl(audio_client_t handle, int cmd, void *parameter)
         }
 #endif
     }
-    else if (cmd == 3)
+    else if (cmd == AUDIO_IOCTL_BYTES_IN_CACHE)
     {
         uint32_t *byte_left = (uint32_t *)parameter;
         ret = -1;
@@ -3840,7 +3845,7 @@ AUDIO_API int audio_ioctl(audio_client_t handle, int cmd, void *parameter)
             ret = 0;
         }
     }
-    else if (cmd == -1)
+    else if (cmd == AUDIO_IOCTL_FADE_OUT_START)
     {
 #if !SOFTWARE_TX_MIX_ENABLE
         lock();
@@ -3853,6 +3858,15 @@ AUDIO_API int audio_ioctl(audio_client_t handle, int cmd, void *parameter)
         }
         unlock();
 #endif
+    }
+    else if (cmd == AUDIO_IOCTL_SET_CPU_FREQ_SCALE)
+    {
+        uint32_t enable = (uint32_t)parameter;
+        LOG_I("cpu freq scale enable=%d", enable);
+        if (enable)
+            pm_scenario_stop(PM_SCENARIO_AUDIO);
+        else
+            pm_scenario_start(PM_SCENARIO_AUDIO);
     }
     LOG_D("audio_ioctl: cmd=%d ret=%d", cmd, ret);
     return ret;

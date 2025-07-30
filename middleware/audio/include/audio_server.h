@@ -86,21 +86,26 @@ typedef struct audio_client_base_t *audio_client_t;
 
 typedef struct
 {
+    //only used for 3mic branch
     uint8_t codec;
     uint8_t tsco;
+
     // write parameter, only invalid when rwflag is AUDIO_TX/AUDIO_TXRX
-    //int      output_device; // now only codec
     uint32_t write_samplerate; //only effecty when rwflag is AUDIO_TX or AUDIO_TXRX
     uint32_t write_cache_size;
     uint8_t  write_channnel_num;
     uint8_t  write_bits_per_sample;
     uint8_t  is_need_3a;
     uint8_t  disable_uplink_agc;
+
     // read paramter, only invalid when rwflag is AUDIO_RX/AUDIO_TXRX
     uint32_t read_samplerate;
     uint32_t read_cache_size;
     uint8_t  read_channnel_num;
     uint8_t  read_bits_per_sample;
+
+    // power control
+    uint8_t  cpu_freq_scale; // 0--disalbe  1--enable
 } audio_parameter_t;
 
 
@@ -182,6 +187,12 @@ int audio_write(audio_client_t handle, uint8_t *data, uint32_t data_len);
 
 int audio_read(audio_client_t handle, uint8_t *buf, uint32_t buf_size);
 
+#define AUDIO_IOCTL_FADE_OUT_START                  -1  // parameter type is NA
+#define AUDIO_IOCTL_FACTORY_LOOPBACK_GAIN           0   // parameter type is uint32_t
+#define AUDIO_IOCTL_FLUSH_TIME_MS                   1   // parameter type is uint32_t *
+#define AUDIO_IOCTL_IS_FADE_OUT_DONE                2   // parameter type is NA
+#define AUDIO_IOCTL_BYTES_IN_CACHE                  3   // parameter type is uint32_t *
+#define AUDIO_IOCTL_SET_CPU_FREQ_SCALE              4   // parameter type is uint32_t, 1 enable scale, 0 disable scale
 int audio_ioctl(audio_client_t handle, int cmd, void *parameter);
 
 int audio_close(audio_client_t handle);
