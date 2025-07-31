@@ -1750,7 +1750,7 @@ goto download
 echo com%input%
 '''
     if os.getenv("LEGACY_ENV"):
-        uart_comment += MakeLine('''{}  --func 0 --port com%input% --baund 1000000 --loadram 1 --postact 1 --verify --device {} --file ImgBurnList.ini --log ImgBurn.log
+        uart_comment += MakeLine('''{}  --func 0 --port com%input% --baund 1000000 --loadram 1 --postact 1 --compare --verify --device {} --file ImgBurnList.ini --log ImgBurn.log
 if %errorlevel%==0 (
     echo Download Successful
 )else (
