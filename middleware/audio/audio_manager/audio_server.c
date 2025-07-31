@@ -2650,7 +2650,7 @@ inline static void audio_client_start(audio_client_t client)
     rt_pm_request(PM_SLEEP_MODE_IDLE);
     rt_pm_hw_device_start();
 #ifdef SF32LB52X
-    if (!client->cpu_freq_scale)
+    if (!client->parameter.cpu_freq_scale)
     {
         LOG_I("start pm scenario audio");
         pm_scenario_start(PM_SCENARIO_AUDIO);
