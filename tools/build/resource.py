@@ -1803,9 +1803,9 @@ def generate_sftool_param(main_env, device, memory, download_list):
         addr_str = f"0x{item['addr']:08X}"
         
         if item['name'].lower().endswith(('.elf', '.hex')):
-            files.append({"file": item['name']})
+            files.append({"path": item['name']})
         else:
-            files.append({"file": item['name'], "addr": addr_str})
+            files.append({"path": item['name'], "address": addr_str})
 
     # Create sftool configuration
     config = {
