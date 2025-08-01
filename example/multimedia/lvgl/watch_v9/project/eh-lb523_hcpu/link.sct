@@ -22,7 +22,7 @@ LR_IROM1 CODE_START_ADDR CODE_SIZE  {    ; load region size_region
 
 #ifdef BSP_USING_PSRAM
     ER_IROM_PSRAM PSRAM_CODE_START_ADDR{
-        lv_*.o (+RO)
+        lv_*.o (.text.*)
     }
   ScatterAssert((ImageLength(ER_IROM_PSRAM))<PSRAM_CODE_SIZE)
   RW_PSRAM1 PSRAM_DATA_START_ADDR {
