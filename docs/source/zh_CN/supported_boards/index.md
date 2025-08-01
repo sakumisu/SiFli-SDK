@@ -56,7 +56,7 @@
 583-EVB       | SF32LB58X_EVB_CORE(583)   |   ec-lb583    | 
 585-EVB       | SF32LB58X_EVB_CORE(585)   |   ec-lb585    | 
 587-EVB       | SF32LB58X_EVB_CORE(587)   |   [ec-lb587](boards\ec-lb587\doc\index.md)    | 
-LCD-A128R12N1-DSI | SF32LB58-DevKit-LCD |   sf32lb58-lcd_a128r12n1_dsi    |
+LCD-A128R32N1-DSI | SF32LB58-DevKit-LCD |   [sf32lb58-lcd_a128r32n1_dsi](boards/sf32lb58-lcd_a128r32n1_dsi/doc/index.md)    |
 LCD-N16R32N1-DPI | SF32LB58-DevKit-LCD |   [sf32lb58-lcd_n16r32n1_dpi](boards\sf32lb58-lcd_n16r32n1_dpi\doc\index.md)    |
 LCD-N16R32N1-DSI | SF32LB58-DevKit-LCD |   [sf32lb58-lcd_n16r32n1_dsi](boards\sf32lb58-lcd_n16r32n1_dsi\doc\index.md)    |
 
