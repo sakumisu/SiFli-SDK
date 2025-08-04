@@ -1378,78 +1378,27 @@ static rt_err_t micbias_rx_ind(rt_device_t dev, rt_size_t size)
     return 0;
 }
 
+static audio_client_t g_micbias;
 AUDIO_API void micbias_power_on()
 {
-    int stream;
-    rt_err_t err;
-    audio_server_t *server = get_server();
-    audio_device_speaker_t *my = &server->device_speaker_private;
-    LOG_I("%s 0x%p", __FUNCTION__, my->audcodec_dev);
-    if (!my->audprc_dev)
-    {
-        my->audprc_dev = rt_device_find(AUDIO_SPEAKER_NAME);
-        RT_ASSERT(my->audprc_dev);
-        {
-            err = rt_device_open(my->audprc_dev, RT_DEVICE_FLAG_RDWR);
-            RT_ASSERT(RT_EOK == err);
-        }
-
-        my->audcodec_dev = rt_device_find(AUDIO_PRC_CODEC_NAME);
-        RT_ASSERT(my->audcodec_dev);
-        err = rt_device_open(my->audcodec_dev, RT_DEVICE_FLAG_WRONLY);
-        RT_ASSERT(RT_EOK == err);
-    }
-    {
-        rt_device_set_rx_indicate(my->audprc_dev, micbias_rx_ind);
-        //config ADC
-        struct rt_audio_caps caps;
-        int stream;
-        rt_device_control(my->audcodec_dev, AUDIO_CTL_SETINPUT, (void *)AUDPRC_RX_FROM_CODEC);
-        caps.main_type = AUDIO_TYPE_INPUT;
-        caps.sub_type = 1 << HAL_AUDCODEC_ADC_CH0;
-        caps.udata.config.channels   = 1;
-        caps.udata.config.samplerate = 8000;
-        caps.udata.config.samplefmt = 16;
-        rt_device_control(my->audcodec_dev, AUDIO_CTL_CONFIGURE, &caps);
-
-        LOG_I("codec input parameter:sub_type=%d channels %d, rate %d, bits %d", caps.sub_type, caps.udata.config.channels,
-              caps.udata.config.samplerate, caps.udata.config.samplefmt);
-
-        rt_device_control(my->audprc_dev, AUDIO_CTL_SETINPUT, (void *)AUDPRC_RX_FROM_CODEC);
-
-        caps.main_type = AUDIO_TYPE_INPUT;
-        caps.sub_type = HAL_AUDPRC_RX_CH0 - HAL_AUDPRC_RX_CH0;
-        caps.udata.config.channels   = 1;
-        caps.udata.config.samplerate = 8000;
-        caps.udata.config.samplefmt = 16;
-        LOG_I("mic input:rx channel %d, channels %d, rate %d, bitwidth %d", 0, caps.udata.config.channels,
-              caps.udata.config.samplerate, caps.udata.config.samplefmt);
-        rt_device_control(my->audprc_dev, AUDIO_CTL_CONFIGURE, &caps);
-        stream = AUDIO_STREAM_RECORD | ((1 << HAL_AUDCODEC_ADC_CH0) << 8);
-        rt_device_control(my->audcodec_dev, AUDIO_CTL_START, &stream);
-        stream = AUDIO_STREAM_RECORD | ((1 << HAL_AUDPRC_RX_CH0) << 8);
-        rt_device_control(my->audprc_dev, AUDIO_CTL_START, &stream);
-        HAL_NVIC_DisableIRQ(AUDPRC_RX0_DMA_IRQ);
-    }
+    audio_parameter_t pa = {0};
+    pa.write_bits_per_sample = 16;
+    pa.write_channnel_num = 1;
+    pa.write_samplerate = 8000;
+    pa.read_bits_per_sample = 16;
+    pa.read_channnel_num = 1;
+    pa.read_samplerate = 16000;
+    pa.read_cache_size = 0;
+    pa.write_cache_size = 0;
+    g_micbias = audio_open(AUDIO_TYPE_LOCAL_RECORD, AUDIO_RX, &pa, NULL, NULL);
+    RT_ASSERT(g_micbias);
+    HAL_NVIC_DisableIRQ(AUDPRC_RX0_DMA_IRQ);
 }
 
 AUDIO_API void micbias_power_off()
 {
-    audio_server_t *server = get_server();
-    audio_device_speaker_t *my = &server->device_speaker_private;
-    int stream_audcodec = AUDIO_STREAM_RECORD | ((1 << HAL_AUDCODEC_ADC_CH0) << 8);
-    int stream_audprc = AUDIO_STREAM_RECORD | ((1 << HAL_AUDPRC_RX_CH0) << 8);
-    LOG_I("%s 0x%p", __FUNCTION__, my->audprc_dev);
-    if (my->audprc_dev)
-    {
-        rt_device_control(my->audcodec_dev, AUDIO_CTL_STOP, &stream_audcodec);
-        rt_device_control(my->audprc_dev, AUDIO_CTL_STOP, &stream_audprc);
-        bf0_disable_pll();
-        rt_device_close(my->audcodec_dev);
-        rt_device_close(my->audprc_dev);
-        my->audcodec_dev = NULL;
-        my->audprc_dev = NULL;
-    }
+    audio_close(g_micbias);
+    g_micbias = NULL;
 }
 
 static int audio_device_speaker_open(void *user_data, audio_device_input_callback callback)
