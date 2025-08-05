@@ -1077,7 +1077,7 @@ def GenPartitionTableHeaderFile(src, output_dir, output_name):
     s += MakeLine('')
     s += MakeLine('')
 
-    header = mems[0]
+    header = mems[0] if len(mems) > 0 else {}
     if 'version' in header:
         if "2" == header['version']:
             s += GenPartitionTableHeaderContentV2(env, mems[1:])
