@@ -2650,11 +2650,9 @@ inline static void audio_client_start(audio_client_t client)
     rt_pm_request(PM_SLEEP_MODE_IDLE);
     rt_pm_hw_device_start();
 #ifdef SF32LB52X
-    if (!client->parameter.cpu_freq_scale)
-    {
-        LOG_I("start pm scenario audio");
-        pm_scenario_start(PM_SCENARIO_AUDIO);
-    }
+    LOG_I("start pm scenario audio");
+    pm_scenario_start(PM_SCENARIO_AUDIO);
+
     if (client->audio_type == AUDIO_TYPE_BT_VOICE)
     {
         HAL_HPAON_WakeCore(CORE_ID_LCPU);
@@ -3859,10 +3857,10 @@ AUDIO_API int audio_ioctl(audio_client_t handle, int cmd, void *parameter)
         unlock();
 #endif
     }
-    else if (cmd == AUDIO_IOCTL_SET_CPU_FREQ_SCALE)
+    else if (cmd == AUDIO_IOCTL_ENABLE_CPU_LOW_SPEED)
     {
         uint32_t enable = (uint32_t)parameter;
-        LOG_I("cpu freq scale enable=%d", enable);
+        LOG_I("cpu low speed enable=%d", enable);
         if (enable)
             pm_scenario_stop(PM_SCENARIO_AUDIO);
         else
